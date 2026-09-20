@@ -254,3 +254,93 @@ grant execute on function public.set_demo_card_status(text, public.card_status) 
 -- 2) replace fixed demo IDs with auth_user_id checks;
 -- 3) keep payment execution behind a server-side/Edge Function authorization layer;
 -- 4) integrate approved MTN/Orange APIs instead of the demo wallet debit.
+
+-- Demo-only customer actions used by the Customer APK.
+create or replace function public.change_demo_pin(
+  p_card_token text,
+  p_old_pin text,
+  p_new_pin text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_card public.cards%rowtype;
+begin
+  if length(coalesce(p_new_pin, '')) <> 4 or p_new_pin !~ '^[0-9]{4}$' then
+    return jsonb_build_object('success', false, 'reason', 'INVALID_NEW_PIN');
+  end if;
+
+  select * into v_card from public.cards where card_token = p_card_token for update;
+  if not found then return jsonb_build_object('success', false, 'reason', 'CARD_NOT_FOUND'); end if;
+
+  if not crypt(coalesce(p_old_pin, ''), v_card.pin_hash) = v_card.pin_hash then
+    insert into public.security_events(card_id, customer_id, event_type, details)
+    values (v_card.id, v_card.customer_id, 'invalid_pin_change', '{}'::jsonb);
+    return jsonb_build_object('success', false, 'reason', 'INVALID_PIN');
+  end if;
+
+  update public.cards
+  set pin_hash = crypt(p_new_pin, gen_salt('bf')), failed_pin_attempts = 0, updated_at = now()
+  where id = v_card.id;
+
+  insert into public.security_events(card_id, customer_id, event_type, details)
+  values (v_card.id, v_card.customer_id, 'pin_changed', '{}'::jsonb);
+
+  return jsonb_build_object('success', true);
+end;
+$$;
+
+grant execute on function public.change_demo_pin(text, text, text) to anon, authenticated;
+
+create or replace function public.demo_top_up(p_amount bigint)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_wallet public.wallets%rowtype;
+  v_after bigint;
+begin
+  if p_amount is null or p_amount <= 0 or p_amount > 1000000 then
+    return jsonb_build_object('success', false, 'reason', 'INVALID_AMOUNT');
+  end if;
+  select * into v_wallet from public.wallets where customer_id = '11111111-1111-1111-1111-111111111111'::uuid for update;
+  if not found or not v_wallet.is_active then return jsonb_build_object('success', false, 'reason', 'WALLET_NOT_AVAILABLE'); end if;
+  v_after := v_wallet.balance + p_amount;
+  update public.wallets set balance = v_after, updated_at = now() where id = v_wallet.id;
+  return jsonb_build_object('success', true, 'balance_after', v_after, 'amount', p_amount);
+end;
+$$;
+
+grant execute on function public.demo_top_up(bigint) to anon, authenticated;
+
+create or replace function public.demo_send(p_amount bigint, p_recipient text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_wallet public.wallets%rowtype;
+  v_after bigint;
+begin
+  if p_amount is null or p_amount <= 0 or p_amount > 1000000 or length(trim(coalesce(p_recipient, ''))) < 3 then
+    return jsonb_build_object('success', false, 'reason', 'INVALID_TRANSFER');
+  end if;
+  select * into v_wallet from public.wallets where customer_id = '11111111-1111-1111-1111-111111111111'::uuid for update;
+  if not found or not v_wallet.is_active then return jsonb_build_object('success', false, 'reason', 'WALLET_NOT_AVAILABLE'); end if;
+  if v_wallet.balance < p_amount then return jsonb_build_object('success', false, 'reason', 'INSUFFICIENT_FUNDS'); end if;
+  v_after := v_wallet.balance - p_amount;
+  update public.wallets set balance = v_after, updated_at = now() where id = v_wallet.id;
+  insert into public.security_events(card_id, customer_id, event_type, details)
+  select id, customer_id, 'demo_send', jsonb_build_object('amount', p_amount, 'recipient', p_recipient)
+  from public.cards where card_token = 'CARD_DEMO_4821';
+  return jsonb_build_object('success', true, 'balance_after', v_after, 'amount', p_amount, 'recipient', p_recipient);
+end;
+$$;
+
+grant execute on function public.demo_send(bigint, text) to anon, authenticated;

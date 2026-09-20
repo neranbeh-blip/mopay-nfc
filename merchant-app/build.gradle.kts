@@ -11,7 +11,7 @@ android {
         applicationId = "com.mopay.merchant"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
+        versionCode = 3
         versionName = "1.0.0"
     }
 
