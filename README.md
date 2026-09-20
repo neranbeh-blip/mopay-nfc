@@ -1,22 +1,32 @@
-# MoPay NFC
+# MoPay NFC Demo
 
-Fresh standalone Android prototype for the MoPay NFC concept.
+Professional MTN-inspired customer + merchant Android prototype for the MoPay NFC concept.
 
 ## Included
-- Customer Android app
-- Merchant Android app
-- NFC NDEF card reader
-- Demo freeze/unfreeze
-- Demo PIN authorization
-- GitHub Actions cloud APK build
-- Java/Kotlin JVM target aligned to Java 17
-- Gradle 8.7 pinned in GitHub Actions
+- `customer-app`: customer wallet dashboard
+- `merchant-app`: merchant NFC payment terminal
+- Supabase REST RPC integration using the project publishable key
+- Customer balance, card status, freeze/unfreeze, transaction history
+- Merchant amount entry, NFC card detection, PIN authorization, payment processing, daily summary
+- Black / MTN-yellow / white visual system
+- MoPay launcher icon/logo
 
-## Demo card
-Write this NDEF text to an NTAG213:
+## Supabase
+The apps call the following RPCs:
+- `get_demo_customer_snapshot`
+- `get_demo_merchant_dashboard`
+- `set_demo_card_status`
+- `process_demo_payment`
 
-MOPAY:CARD_DEMO_4821
+Run `mopay-supabase-app-access.sql` in Supabase SQL Editor after the foundation SQL.
 
-Demo PIN: 1234
+The client uses the **publishable** key only. Never put a Supabase secret/service-role key in an APK.
 
-This version is a prototype. It does not connect to MTN MoMo or Orange Money and does not move real funds.
+## Demo credentials
+- Customer: NGOH ERAN
+- Demo card: `CARD_DEMO_4821` / displayed as `•••• 4821`
+- PIN: `1234`
+- Demo merchant ID: `22222222-2222-2222-2222-222222222222`
+
+## Important
+This is a prototype. The payment RPC only debits the demo Supabase wallet. It does not move real MTN Mobile Money funds. Production requires authenticated users, stronger card authentication, server-side authorization, transaction limits/risk controls, and approved operator APIs.
