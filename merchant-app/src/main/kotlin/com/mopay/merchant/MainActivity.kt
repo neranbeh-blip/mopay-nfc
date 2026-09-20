@@ -206,10 +206,18 @@ class MainActivity : Activity() {
         Toast.makeText(this, "NFC detected: $detectedTechnology", Toast.LENGTH_SHORT).show()
     }
 
-    private fun readNdefText(tag: Tag): String? = try {
-        val ndef = Ndef.get(tag) ?: return null
-        ndef.connect(); val message: NdefMessage? = ndef.ndefMessage; val result = message?.records?.firstOrNull()?.payload?.let { decodePayload(it) }; ndef.close(); result
-    } catch (_: Exception) { null }
+    private fun readNdefText(tag: Tag): String? {
+        return try {
+            val ndef = Ndef.get(tag) ?: return null
+            ndef.connect()
+            val message: NdefMessage? = ndef.ndefMessage
+            val result = message?.records?.firstOrNull()?.payload?.let { decodePayload(it) }
+            ndef.close()
+            result
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     private fun decodePayload(payload: ByteArray): String { if (payload.isEmpty()) return ""; val languageLength = payload[0].toInt() and 0x3F; val start = 1 + languageLength; return if (start < payload.size) String(payload, start, payload.size - start, Charset.forName("UTF-8")) else String(payload, Charset.forName("UTF-8")) }
     private fun humanReason(reason: String): String = when (reason) { "CARD_FROZEN" -> "This card is frozen. Unfreeze it in the Customer app and try again."; "CARD_BLOCKED" -> "This card is blocked."; "CARD_LOST" -> "This card is marked as lost."; "INVALID_PIN" -> "The PIN is incorrect."; "INSUFFICIENT_FUNDS" -> "The customer does not have enough balance."; "CARD_NOT_FOUND" -> "Demo card mapping failed."; else -> reason.replace('_', ' ') }
